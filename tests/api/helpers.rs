@@ -10,93 +10,6 @@ use zero2prod::{
     telemetry::{get_subscriber, init_subscriber},
 };
 
-#[tokio::test]
-async fn health_check_works() {
-    // Arrange
-    let app = spawn_app().await;
-    let address = app.address;
-    let client = reqwest::Client::new();
-
-    // Act
-    let response = client
-        .get(&format!("{address}/health_check"))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    // Assert
-    assert!(response.status().is_success());
-    assert_eq!(Some(0), response.content_length());
-}
-
-#[tokio::test]
-async fn subscribe_returns_a_200_for_valid_form_data() {
-    // Arrange
-    let app = spawn_app().await;
-    let address = app.address;
-    let client = reqwest::Client::new();
-
-    // Act
-    let response = client
-        .post(&format!("{address}/subscribe"))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body("name=le%20guin&email=ursula_le_guin%40gmail.com")
-        .send()
-        .await
-        .expect("Failed to execute request");
-
-    // Assert
-    assert!(response.status().is_success());
-    assert_eq!(200, response.status().as_u16());
-
-    let saved = sqlx::query!("SELECT email, name FROM subscriptions",)
-        .fetch_one(&app.db_pool)
-        .await
-        .expect("Failed to fetch saved subscription.");
-
-    assert_eq!(saved.email, "ursula_le_guin@gmail.com");
-    assert_eq!(saved.name, "le guin");
-}
-
-#[tokio::test]
-async fn subscribe_returns_a_400_when_data_is_missing() {
-    // Arrange
-    let app = spawn_app().await;
-    let address = app.address;
-    let client = reqwest::Client::new();
-    let test_cases = vec![
-        ("name=l2%20guin", "email missing from request"),
-        (
-            "email=ursula_le_guin%40gmail.com",
-            "name missing from request",
-        ),
-        ("", "no data in request"),
-    ];
-
-    for (invalid_body, error_message) in test_cases {
-        // Act
-        let response = client
-            .post(format!("{address}/subscribe"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(invalid_body)
-            .send()
-            .await
-            .expect("Failed to make request");
-
-        // Assert
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            "Expected bad request when {error_message}"
-        );
-    }
-}
-
-pub struct TestApp {
-    pub address: String,
-    pub db_pool: PgPool,
-}
-
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
     let subscriber_name = "test".to_string();
@@ -110,8 +23,13 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     }
 });
 
+pub struct TestApp {
+    pub address: String,
+    pub db_pool: PgPool,
+}
+
 #[allow(clippy::let_underscore_future)]
-async fn spawn_app() -> TestApp {
+pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind address.");
@@ -146,7 +64,7 @@ async fn spawn_app() -> TestApp {
     }
 }
 
-pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+async fn configure_database(config: &DatabaseSettings) -> PgPool {
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to database.");
