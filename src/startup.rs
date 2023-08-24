@@ -2,7 +2,7 @@ use std::net::TcpListener;
 
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
-use crate::routes::{confirm, health_check, publish_newsletter, subscribe};
+use crate::routes::{confirm, health_check, home, login_form, publish_newsletter, subscribe};
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
 use sqlx::postgres::PgPoolOptions;
@@ -82,7 +82,9 @@ pub fn run(
             .app_data(connection.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
+            .route("/", web::get().to(home))
             .route("/health_check", web::get().to(health_check))
+            .route("/login", web::get().to(login_form))
             .route("/newsletters", web::post().to(publish_newsletter))
             .route("/subscribe", web::post().to(subscribe))
             .route("/subscribe/confirm", web::get().to(confirm))
